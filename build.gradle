@@ -1,0 +1,15 @@
+dependencies {
+	compileOnly group: "biz.aQute.bnd", name: "biz.aQute.bndlib", version: "3.1.0"
+	
+    compileOnly group: "org.osgi", name: "org.osgi.core"
+    compileOnly group: "org.osgi", name: "org.osgi.service.component.annotations"
+    
+    compileOnly group: "org.slf4j", name: "slf4j-api"
+    
+    compileOnly group: "com.liferay", name: "com.liferay.dynamic.data.mapping.api"
+    compileOnly group: "com.liferay", name: "com.liferay.configuration.admin.api"
+    compileOnly group: "com.liferay", name: "com.liferay.portal.configuration.metatype.api"
+    compileOnly group: "com.liferay.portal", name: "com.liferay.portal.kernel"
+    
+    compileOnly group: "com.liferay.commerce", name: "com.liferay.commerce.account.api"
+}
