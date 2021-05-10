@@ -95,7 +95,7 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 			_log.debug("Unable to determine locale, so default will be used");
 			locale = LocaleUtil.getDefault();
 		}
-		
+
 		final long companyId = getCompanyId(formRecord);
 
 		switch (formRecord.getStatus()) {
@@ -273,9 +273,9 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 				_log.debug("Matched to {}[{}]", commerceAccount.getName(), commeceAccountId);
 				_log.debug("Proceeding to assign {} to {}", userId, commeceAccountId);
 				ServiceContext context = new ServiceContext();
-				context.setUserId(userId);
+				context.setUserId(commerceAccount.getUserId());
 				_commerceAccountUserRelLocalService.addCommerceAccountUserRel(commeceAccountId,
-						commerceAccount.getUserId(), context);
+						userId, context);
 			} else {
 				_log.debug("Too many matches");
 				accounts.forEach(a -> {
