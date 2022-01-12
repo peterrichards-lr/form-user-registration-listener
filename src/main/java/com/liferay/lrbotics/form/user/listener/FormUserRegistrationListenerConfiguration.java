@@ -23,8 +23,20 @@ public interface FormUserRegistrationListenerConfiguration {
 	@Meta.AD(required = false, name = "liferaybotics-user-registration-create-user-on-pending", type = Type.Boolean, description = "liferaybotics-user-registration-create-user-on-pending-description", deflt = "true")
 	public boolean createOnPending();
 
+	@Meta.AD(required = false, name = "liferaybotics-user-registration-create-commerce-account", type = Type.Boolean, description = "liferaybotics-user-registration-create-commerce-account-description", deflt = "true")
+	public boolean createCommerceAccount();
+
+	@Meta.AD(required = false, name = "liferaybotics-user-registration-send-email", type = Type.Boolean, description = "liferaybotics-user-registration-send-email-description", deflt = "false")
+	public boolean sendEmail();
+
+	@Meta.AD(required = false, name = "liferaybotics-user-registration-portal-url", type = Type.String, description = "liferaybotics-user-registration-portal-url-description", deflt = "http://localhost:8080")
+	public String portalURL();
+
 	@Meta.AD(required = false, name = "liferaybotics-user-registration-form-id", type = Type.Integer, description = "liferaybotics-user-registration-form-id-description")
 	public long formId();
+
+	@Meta.AD(required = false, name = "liferaybotics-user-registration-site-membership", type = Type.String, description = "liferaybotics-user-registration-site-membership-description", deflt = "")
+	public String siteIds();
 
 	@Meta.AD(required = false, name = "liferaybotics-user-registration-title-field-id", type = Type.String, description = "liferaybotics-user-registration-title-field-id-description", deflt = "title")
 	public String titleFieldId();
