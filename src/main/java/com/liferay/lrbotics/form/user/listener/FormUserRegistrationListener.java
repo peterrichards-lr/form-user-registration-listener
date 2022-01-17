@@ -1,14 +1,14 @@
 package com.liferay.lrbotics.form.user.listener;
 
+import com.liferay.account.exception.NoSuchEntryException;
+import com.liferay.account.model.AccountEntry;
+import com.liferay.account.service.AccountEntryLocalService;
 import com.liferay.commerce.account.model.CommerceAccount;
 import com.liferay.commerce.account.service.CommerceAccountLocalService;
 import com.liferay.commerce.account.service.CommerceAccountUserRelLocalService;
-import com.liferay.dynamic.data.mapping.model.DDMFormFieldType;
+import com.liferay.dynamic.data.mapping.form.field.type.constants.DDMFormFieldTypeConstants;
 import com.liferay.dynamic.data.mapping.model.DDMFormInstanceRecordVersion;
 import com.liferay.dynamic.data.mapping.storage.DDMFormFieldValue;
-import com.liferay.portal.kernel.dao.orm.DynamicQuery;
-import com.liferay.portal.kernel.dao.orm.DynamicQueryFactoryUtil;
-import com.liferay.portal.kernel.dao.orm.RestrictionsFactoryUtil;
 import com.liferay.portal.kernel.exception.ModelListenerException;
 import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.model.BaseModelListener;
@@ -29,6 +29,7 @@ import com.liferay.portal.kernel.service.ServiceContext;
 import com.liferay.portal.kernel.service.ServiceContextThreadLocal;
 import com.liferay.portal.kernel.service.UserLocalService;
 import com.liferay.portal.kernel.theme.ThemeDisplay;
+import com.liferay.portal.kernel.util.LinkedHashMapBuilder;
 import com.liferay.portal.kernel.util.LocaleUtil;
 import com.liferay.portal.kernel.util.Validator;
 import com.liferay.portal.kernel.util.WebKeys;
@@ -37,6 +38,7 @@ import com.liferay.portal.kernel.workflow.WorkflowConstants;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -59,26 +61,24 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 	private FormUserRegistrationListenerConfiguration getConfig(DDMFormInstanceRecordVersion formRecord) {
 		final long groupId = formRecord.getGroupId();
 		try {
-			return _configurationProvider
-					.getGroupConfiguration(
-							FormUserRegistrationListenerConfiguration.class,
-							groupId);
+			return _configurationProvider.getGroupConfiguration(FormUserRegistrationListenerConfiguration.class,
+					groupId);
 		} catch (ConfigurationException e) {
 			_log.error("Error while getting group / site configuration", e);
 			return null;
 		}
 	}
-	
+
 	@Override
 	public void onAfterCreate(DDMFormInstanceRecordVersion formRecord) throws ModelListenerException {
 		final FormUserRegistrationListenerConfiguration config = getConfig(formRecord);
-		
+
 		if (config == null) {
 			_log.debug("Unable to obtain form listener configuration");
 		} else if (!config.enabled()) {
 			_log.debug("The form listener is disabled");
 		} else {
-			_log.debug("Processing create event");			
+			_log.debug("Processing create event");
 		}
 
 		super.onAfterCreate(formRecord);
@@ -93,7 +93,8 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 	 * @see FormUserAccountListenerConfiguration
 	 */
 	@Override
-	public void onAfterUpdate(DDMFormInstanceRecordVersion formRecord) throws ModelListenerException {
+	public void onAfterUpdate(DDMFormInstanceRecordVersion original, DDMFormInstanceRecordVersion formRecord)
+			throws ModelListenerException {
 		final FormUserRegistrationListenerConfiguration config = getConfig(formRecord);
 
 		if (config == null) {
@@ -104,7 +105,7 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 			_log.debug("Processing update event");
 			processUpdateEvent(formRecord, config);
 		}
-		super.onAfterUpdate(formRecord);
+		super.onAfterUpdate(original, formRecord);
 	}
 
 	private void processUpdateEvent(DDMFormInstanceRecordVersion formRecord,
@@ -136,55 +137,57 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 		_log.debug("groupId: {}", groupId);
 		_log.debug("portalURL: {}", portalURL);
 
-		final ServiceContext serviceContext =
-				ServiceContextThreadLocal.getServiceContext();
-		
-		HttpServletRequest httpServletRequest =
-				serviceContext.getRequest();
+		final ServiceContext serviceContext = ServiceContextThreadLocal.getServiceContext();
+
+		HttpServletRequest httpServletRequest = serviceContext.getRequest();
 
 		if (httpServletRequest == null) {
 			_log.warn("serviceContext.getRequest() returned null");
 		}
 
 		ThemeDisplay themeDisplay = serviceContext.getThemeDisplay();
-		
+
 		if (themeDisplay == null) {
-			_log.warn("serviceContext.getThemeDisplay() returned null");			
+			_log.warn("serviceContext.getThemeDisplay() returned null");
 		} else {
 			_log.debug("themeDisplay.getSiteGroupId(): {}", themeDisplay.getSiteGroupId());
 		}
-		
-		if (httpServletRequest != null)  {
-			httpServletRequest.setAttribute(
-					WebKeys.THEME_DISPLAY, themeDisplay);			
+
+		if (httpServletRequest != null) {
+			httpServletRequest.setAttribute(WebKeys.THEME_DISPLAY, themeDisplay);
 			serviceContext.setRequest(httpServletRequest);
-			
+
 			_log.debug("Added ThemeDisplay to request attributes and added the request to the ServiceContext");
 		}
-		
+
 		_log.debug("serviceContext.getCompanyId(): {}", serviceContext.getCompanyId());
 		_log.debug("serviceContext.getUserId(): {}", serviceContext.getUserId());
 		_log.debug("serviceContext.getScopeGroupId(): {}", serviceContext.getScopeGroupId());
 		_log.debug("serviceContext.getPortalURL(): {}", serviceContext.getPortalURL());
-		
+
 		_log.debug("serviceContext.getPortletId(): {}", serviceContext.getPortletId());
-		
+
 		try {
 			_log.debug("serviceContext.getPortletPreferencesIds(): {}", serviceContext.getPortletPreferencesIds());
 		} catch (NullPointerException npe) {
-			// If there is an issue getting the portlet preference IDs then reset portlet ID as this is used by
-			// serviceContext.getPortletPreferencesIds() to determine when to get them from the HttpServletRequest
+			// If there is an issue getting the portlet preference IDs then reset portlet ID
+			// as this is used by
+			// serviceContext.getPortletPreferencesIds() to determine when to get them from
+			// the HttpServletRequest
 			// This is called when the serviceContext is cloned.
 			_log.debug("serviceContext.getPortletPreferencesIds() threw NullPointerException so resetting portlet ID");
 			serviceContext.setPortletId(null);
 		}
-		
+
 		serviceContext.setCompanyId(companyId);
 		serviceContext.setUserId(creatorUserId);
 		serviceContext.setPortalURL(portalURL);
 		serviceContext.setScopeGroupId(groupId);
-		
-		switch (formRecord.getStatus()) {
+
+		final boolean workflowEnabled = isWorkflowEnabled(formRecord);
+		final int workflowStatus = formRecord.getStatus();
+
+		switch (workflowStatus) {
 		case WorkflowConstants.STATUS_PENDING:
 			_log.debug("Form in pending state");
 
@@ -214,7 +217,7 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 			}
 
 			// If the record was not created on pending then let's do it now
-			if (!config.createOnPending()) {
+			if (!config.createOnPending() || !workflowEnabled) {
 				addInactiveUser(companyId, fields, locale, serviceContext, config);
 
 			}
@@ -224,6 +227,17 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 		default:
 			_log.debug("Unsupported workflow state - {}", formRecord.getStatus());
 			break;
+		}
+	}
+
+	private boolean isWorkflowEnabled(DDMFormInstanceRecordVersion formRecord) {
+		try {
+			final String workflowDefinition = formRecord.getFormInstance().getSettingsModel().workflowDefinition();
+			_log.debug("workflowDefinition): {}", workflowDefinition);
+			return "no-workflow".equals(workflowDefinition) == false;
+		} catch (final PortalException pe) {
+			_log.error("Unable to determine if workflow is enabled", pe);
+			return false;
 		}
 	}
 
@@ -239,19 +253,19 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 		final long suffixId = -1L;
 		final boolean male = false;
 		final Calendar dob = new GregorianCalendar(1970, 1, 1);
-		
+
 		final boolean sendEmail = config.sendEmail();
 		final String emailAddress = getEmailAddress(fields, config);
-		
-		User user = _userLocalService.fetchUserByEmailAddress(
-				companyId, emailAddress);
+
+		User user = _userLocalService.fetchUserByEmailAddress(companyId, emailAddress);
 
 		if (user != null) {
 			_log.warn("A user already exists with email address {}", emailAddress);
 			return;
 		}
 
-		_log.debug(sendEmail ? "An email will be sent to the user at {}" : "No email will be sent to the user", emailAddress);
+		_log.debug(sendEmail ? "An email will be sent to the user at {}" : "No email will be sent to the user",
+				emailAddress);
 
 		final String jobRole = getJobRole(fields, config);
 		final String jobTitle = getValueOrDefault(getJobTitle(fields, config), jobRole);
@@ -266,9 +280,10 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 		User newUser;
 		try {
 			newUser = _userLocalService.addUser(serviceContext.getUserId(), companyId, autoPassword, null, null,
-					autoScreenName, null, emailAddress, locale, getForename(fields, config), null, getSurname(fields, config), prefixId,
-					suffixId, male, (dob.get(Calendar.MONTH) - 1), dob.get(Calendar.DATE), dob.get(Calendar.YEAR),
-					jobTitle, siteIds, null, null, null, sendEmail, serviceContext);
+					autoScreenName, null, emailAddress, locale, getForename(fields, config), null,
+					getSurname(fields, config), prefixId, suffixId, male, (dob.get(Calendar.MONTH) - 1),
+					dob.get(Calendar.DATE), dob.get(Calendar.YEAR), jobTitle, siteIds, null, null, null, sendEmail,
+					serviceContext);
 			newUser.setStatus(WorkflowConstants.STATUS_INACTIVE);
 			_userLocalService.updateUser(newUser);
 		} catch (PortalException e) {
@@ -280,13 +295,14 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 		addPhoneNumber(newUser.getUserId(), newUser.getContactId(), getPhoneNumber(fields, config), serviceContext);
 
 		final String companyName = getCompanyName(fields, config);
+		final String companyNumber = getCompanyNumber(fields, config);
 		if (!Validator.isBlank(companyName)) {
-			CommerceAccount account = lookupCommerceAccount(companyName);
+			CommerceAccount account = lookupCommerceAccount(companyName, companyNumber, companyId);
 
 			try {
 				if (config.createCommerceAccount() && account == null) {
-					account = createCommerceAccount(companyName, getCompanyNumber(fields, config), emailAddress,
-							newUser.getUserId(), serviceContext);
+					account = createCommerceAccount(companyName, companyNumber, emailAddress, newUser.getUserId(),
+							serviceContext);
 				} else {
 					linkCommerceAccountToUser(account, newUser.getUserId());
 				}
@@ -343,7 +359,7 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 		}
 
 		final String type = fieldValue.getType();
-		if (DDMFormFieldType.FIELDSET.equals(type)) {
+		if (DDMFormFieldTypeConstants.FIELDSET.equals(type)) {
 			_log.debug("Recursive call {}", fieldValue.getName());
 			fieldValue.getNestedDDMFormFieldValues()
 					.forEach(nestedFieldValue -> mapFormFields(locale, nestedFieldValue, map));
@@ -353,7 +369,7 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 		final String key = fieldValue.getFieldReference();
 		final String initialValue = fieldValue.getValue().getString(locale);
 
-		if (DDMFormFieldType.SELECT.equals(type) || DDMFormFieldType.RADIO.equals(type)) {
+		if (DDMFormFieldTypeConstants.SELECT.equals(type) || DDMFormFieldTypeConstants.RADIO.equals(type)) {
 			final String normalisedValue = initialValue.replace("[\"", "").replace("\"]", "");
 			final String decodedValue = fieldValue.getDDMFormField().getDDMFormFieldOptions()
 					.getOptionReference(normalisedValue);
@@ -371,23 +387,54 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 				null, new String[] { email }, serviceContext);
 	}
 
-	private CommerceAccount lookupCommerceAccount(final String companyName) {
+	private CommerceAccount lookupCommerceAccount(final String companyName, final String companyNumber,
+			final long companyId) {
 		CommerceAccount account = null;
 
-		if (Validator.isBlank(companyName)) {
+		if (Validator.isBlank(companyName) && Validator.isBlank(companyNumber)) {
 			return account;
 		}
 
-		try {
-			final ClassLoader classLoader = _commerceAccountLocalService.getClass().getClassLoader();
-			final DynamicQuery accountQuery = DynamicQueryFactoryUtil.forClass(CommerceAccount.class, classLoader);
-			accountQuery.add(RestrictionsFactoryUtil.eq("name", companyName.toLowerCase()));
+		if (!Validator.isBlank(companyNumber)) {
+			account = lookupCommerceAccountByCompanyNumber(companyNumber, companyId);
+		}
 
-			List<CommerceAccount> accounts = _commerceAccountLocalService.dynamicQuery(accountQuery);
+		if (account == null) {
+			account = lookupCommerceAccountByCompanyName(companyName, companyId);
+		}
 
+		return account;
+	}
+
+	private CommerceAccount lookupCommerceAccountByCompanyNumber(final String companyNumber, final long companyId) {
+		CommerceAccount account = null;
+		try {		
+			AccountEntry accountEntry = _accountEntryLocalService.getAccountEntryByExternalReferenceCode(companyId, companyNumber);
+			account = _commerceAccountLocalService.getCommerceAccount(accountEntry.getAccountEntryId());
+			_log.debug("Found commerce account {} for {}", account.getCommerceAccountId(), companyNumber);
+			return account;
+		} catch (NoSuchEntryException nsee) {
+			_log.debug("No accounts found for {}", companyNumber);
+		} catch (Exception e) {
+			_log.error("Unable to lookup commerce account - " + companyNumber, e);
+		}
+		return account;
+	}
+
+	private CommerceAccount lookupCommerceAccountByCompanyName(final String companyName, final long companyId) {
+		CommerceAccount account = null;
+		try {		
+			LinkedHashMap<String, Object> params = LinkedHashMapBuilder.<String, Object>put(
+					"types", new String[] {"business"}
+				).build();
+			
+			final List<AccountEntry> accounts = _accountEntryLocalService.searchAccountEntries(companyId, companyName, params, 0, 1, "name", false).getBaseModels();
+			
 			if (accounts.size() == 1) {
-				account = accounts.get(0);
-				_log.debug("Found commerce account {}", account.getCommerceAccountId());
+				final AccountEntry accountEntry = accounts.get(0);
+				account = _commerceAccountLocalService.getCommerceAccount(accountEntry.getAccountEntryId());
+				_log.debug("Found commerce account {} for {}", account.getCommerceAccountId(), companyName);
+				return account;
 			} else if (accounts.isEmpty()) {
 				_log.debug("No accounts found for {}", companyName);
 			} else {
@@ -401,7 +448,6 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 		} catch (Exception e) {
 			_log.error("Unable to lookup commerce account - " + companyName, e);
 		}
-
 		return account;
 	}
 
@@ -411,8 +457,8 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 		}
 
 		final long commeceAccountId = account.getPrimaryKey();
-		_log.debug("Matched to {}[{}]", account.getName(), commeceAccountId);
-		_log.debug("Proceeding to assign {} to {}", userId, commeceAccountId);
+		_log.debug("Matched to account {} [{}]", account.getName(), commeceAccountId);
+		_log.debug("Proceeding to assign user {} to account {}", userId, commeceAccountId);
 		ServiceContext context = new ServiceContext();
 		context.setUserId(account.getUserId());
 		_commerceAccountUserRelLocalService.addCommerceAccountUserRel(commeceAccountId, userId, context);
@@ -484,7 +530,8 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 		return -1;
 	}
 
-	private String getPortalURL(final Company company, final long groupId, final FormUserRegistrationListenerConfiguration config) {
+	private String getPortalURL(final Company company, final long groupId,
+			final FormUserRegistrationListenerConfiguration config) {
 		String url = null;
 		try {
 			if (Validator.isBlank(config.portalURL())) {
@@ -535,55 +582,68 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 		return formRecord.getDDMForm().getDefaultLocale();
 	}
 
-	private String getTitle(final Map<String, String> formFieldMap, final FormUserRegistrationListenerConfiguration config) {
+	private String getTitle(final Map<String, String> formFieldMap,
+			final FormUserRegistrationListenerConfiguration config) {
 		return getFieldValue(formFieldMap, config.titleFieldId());
 	}
 
-	private String getTitleOther(final Map<String, String> formFieldMap, final FormUserRegistrationListenerConfiguration config) {
+	private String getTitleOther(final Map<String, String> formFieldMap,
+			final FormUserRegistrationListenerConfiguration config) {
 		return getFieldValue(formFieldMap, config.titleOtherFieldId());
 	}
 
-	private String getForename(final Map<String, String> formFieldMap, final FormUserRegistrationListenerConfiguration config) {
+	private String getForename(final Map<String, String> formFieldMap,
+			final FormUserRegistrationListenerConfiguration config) {
 		return getFieldValue(formFieldMap, config.forenameFieldId());
 	}
 
-	private String getSurname(final Map<String, String> formFieldMap, final FormUserRegistrationListenerConfiguration config) {
+	private String getSurname(final Map<String, String> formFieldMap,
+			final FormUserRegistrationListenerConfiguration config) {
 		return getFieldValue(formFieldMap, config.surnameFieldId());
 	}
 
-	private String getEmailAddress(final Map<String, String> formFieldMap, final FormUserRegistrationListenerConfiguration config) {
+	private String getEmailAddress(final Map<String, String> formFieldMap,
+			final FormUserRegistrationListenerConfiguration config) {
 		return getFieldValue(formFieldMap, config.emailAddressFieldId());
 	}
 
-	private String getPhoneNumber(final Map<String, String> formFieldMap, final FormUserRegistrationListenerConfiguration config) {
+	private String getPhoneNumber(final Map<String, String> formFieldMap,
+			final FormUserRegistrationListenerConfiguration config) {
 		return getFieldValue(formFieldMap, config.phoneNumberFieldId());
 	}
 
-	private String getJobTitle(final Map<String, String> formFieldMap, final FormUserRegistrationListenerConfiguration config) {
+	private String getJobTitle(final Map<String, String> formFieldMap,
+			final FormUserRegistrationListenerConfiguration config) {
 		return getFieldValue(formFieldMap, config.jobTitleFieldId());
 	}
 
-	private String getJobRole(final Map<String, String> formFieldMap, final FormUserRegistrationListenerConfiguration config) {
+	private String getJobRole(final Map<String, String> formFieldMap,
+			final FormUserRegistrationListenerConfiguration config) {
 		return getFieldValue(formFieldMap, config.jobRoleFieldId());
 	}
 
-	private String getCompanyName(final Map<String, String> formFieldMap, final FormUserRegistrationListenerConfiguration config) {
+	private String getCompanyName(final Map<String, String> formFieldMap,
+			final FormUserRegistrationListenerConfiguration config) {
 		return getFieldValue(formFieldMap, config.companyNameFieldId());
 	}
 
-	private String getCompanyNumber(final Map<String, String> formFieldMap, final FormUserRegistrationListenerConfiguration config) {
+	private String getCompanyNumber(final Map<String, String> formFieldMap,
+			final FormUserRegistrationListenerConfiguration config) {
 		return getFieldValue(formFieldMap, config.companyNumberFieldId());
 	}
 
 	private String getFieldValue(final Map<String, String> formFieldMap, final String key) {
 		return formFieldMap.getOrDefault(key, "");
 	}
-	
+
 	@Reference
 	private CompanyLocalService _companyLocalService;
 
 	@Reference
 	private CommerceAccountLocalService _commerceAccountLocalService;
+
+	@Reference
+	private AccountEntryLocalService _accountEntryLocalService;
 
 	@Reference
 	private CommerceAccountUserRelLocalService _commerceAccountUserRelLocalService;
@@ -599,6 +659,6 @@ public class FormUserRegistrationListener extends BaseModelListener<DDMFormInsta
 
 	@Reference
 	private ConfigurationProvider _configurationProvider;
-	
+
 	private static final Logger _log = LoggerFactory.getLogger(FormUserRegistrationListener.class);
 }

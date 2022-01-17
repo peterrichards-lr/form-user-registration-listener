@@ -1,5 +1,4 @@
 dependencies {
 	compileOnly group: "com.liferay.portal", name: "release.dxp.api"
    	compileOnly group: "org.slf4j", name: "slf4j-api"
-    compileOnly group: "com.liferay.commerce", name: "com.liferay.commerce.account.api"
 }
